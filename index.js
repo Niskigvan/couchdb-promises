@@ -767,7 +767,7 @@ module.exports = function (opt) {
     const queryStr = rev ? `?rev=${rev}` : ''
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
-      stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
       method: 'HEAD',
       statusCodes: {
         200: 'OK - Attachment exists',
@@ -864,7 +864,7 @@ module.exports = function (opt) {
     const queryStr = rev ? `?rev=${rev}` : ''
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
-      stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
       method: 'DELETE',
       statusCodes: {
         200: 'OK – Attachment successfully removed',
@@ -889,7 +889,7 @@ module.exports = function (opt) {
   couch.createIndex = function createIndex (dbName, queryObj,stream) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index`,
-      stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
       method: 'POST',
       postData: queryObj,
       statusCodes: {
@@ -912,7 +912,7 @@ module.exports = function (opt) {
   couch.getIndex = function getIndex (dbName,stream) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index`,
-      stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
       method: 'GET',
       statusCodes: {
         200: 'OK - Success',
@@ -936,7 +936,7 @@ module.exports = function (opt) {
   couch.deleteIndex = function deleteIndex (dbName, docId, name,stream) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index/${encodeURIComponent(docId)}/json/${encodeURIComponent(name)}`,
-      stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Success',
@@ -959,7 +959,7 @@ module.exports = function (opt) {
   couch.getUrl = function (url,stream) {
     return request({
       url: url,
-      stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
       methode: 'GET'
     })
   }
