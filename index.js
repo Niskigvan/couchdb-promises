@@ -1,3 +1,4 @@
+
 // http://docs.couchdb.org/en/stable/api/index.html
 'use strict'
 const assert = require('assert')
@@ -12,9 +13,12 @@ const QUERY_KEYS_JSON = ['key', 'keys', 'startkey', 'endkey']
 module.exports = function (opt) {
   const config = {
     requestTimeout: 10000, // ms
-    verifyCertificate: true
+    verifyCertificate: true,
+    baseUrl:null, //string,
+    dbName:null, //string 
   }
   Object.assign(config, opt)
+  
 
   function isValidUrl (url) {
     const o = urlParse(url)
@@ -26,6 +30,8 @@ module.exports = function (opt) {
     ) return true
     return false
   }
+  if(config.baseUrl && !isValidUrl(config.baseUrl))
+  	 throw new Error('Invalid baseUrl')
 
   function createQueryString (queryObj) {
     const obj = Object.assign({}, queryObj)
@@ -46,10 +52,14 @@ module.exports = function (opt) {
     const t0 = Date.now()
 
     const method = param.method
-    const url = param.url
+    const url = param.url || config.baseUrl
     const statusCodes = param.statusCodes
     const postData = param.postData
     const postContentType = param.postContentType
+    const acceptContentType = param.acceptContentType || "*/*"
+    if(!params.hasOwnProperty(acceptContentType))
+    	acceptContentType="application/json"
+    const respStream = param.stream
 
     const o = urlParse(url)
     const httpOptions = {
@@ -62,7 +72,7 @@ module.exports = function (opt) {
       rejectUnauthorized: config.verifyCertificate,
       headers: {
         'user-agent': 'couchdb-promises',
-        accept: 'application/json'
+        accept: acceptContentType
       }
     }
 
@@ -70,16 +80,15 @@ module.exports = function (opt) {
     if (param.headers && param.headers.Destination) {
       httpOptions.headers.Destination = param.headers.Destination
     }
-
-    if (!isValidUrl(url)) {
-      return Promise.reject({
-        headers: {},
-        data: new Error('Bad request - Invalid url'),
-        status: 400,
-        message: 'Bad request - Invalid url',
-        duration: Date.now() - t0
-      })
-    }
+    if(param.url)
+	    if (!isValidUrl(url))
+	      return Promise.reject({
+	        headers: {},
+	        data: new Error('Bad request - Invalid url'),
+	        status: 400,
+	        message: 'Bad request - Invalid url',
+	        duration: Date.now() - t0
+	      })
 
     let body
     let stream
@@ -133,7 +142,23 @@ module.exports = function (opt) {
 
     return new Promise(function (resolve, reject) {
       const lib = httpOptions.protocol === 'https:' ? https : http
-      const req = lib.request(httpOptions, function (res) {
+      const req = respStream && lib.request(httpOptions, function (res) {
+      	if(Array.isArray(respStream))
+      		respStream.forEach(function(el){res.pipe(el)})
+        else res.pipe(respStream)
+        const ret = {
+          headers: res.headers,
+          status: res.statusCode,
+          message: statusCode(statusCodes, res.statusCode),
+          duration: Date.now() - t0
+        }
+
+        if (ret.status < 400) {
+          return resolve(ret)
+        } else {
+          return reject(ret)
+        }
+      }) || lib.request(httpOptions, function (res) {
         // console.error(url)
         // console.error(res.req._headers)
         let buffer = ''
@@ -146,7 +171,7 @@ module.exports = function (opt) {
           try {
             ret = {
               headers: res.headers,
-              data: JSON.parse(buffer || '{}'),
+              data: acceptContentType=="application/json" && JSON.parse(buffer || '{}') || buffer,
               status: res.statusCode,
               message: statusCode(statusCodes, res.statusCode),
               duration: Date.now() - t0
@@ -206,82 +231,6 @@ module.exports = function (opt) {
     })
   }
 
-  function requestStream (param) {
-    const t0 = Date.now()
-
-    const url = param.url
-    const statusCodes = param.statusCodes
-    const stream = param.stream
-
-    assert(stream && stream.writable && typeof stream.pipe === 'function', 'is writeable stream')
-
-    const o = urlParse(url)
-    const httpOptions = {
-      hostname: o.host && o.host.split(':')[0],
-      port: o.port || 443,
-      path: o.path,
-      auth: o.auth,
-      protocol: o.protocol,
-      method: 'GET',
-      rejectUnauthorized: config.verifyCertificate,
-      headers: {
-        'user-agent': 'couchdb-promises'
-      }
-    }
-
-    if (!isValidUrl(url)) {
-      return Promise.reject({
-        headers: {},
-        data: new Error('Bad request - Invalid url'),
-        status: 400,
-        message: 'Bad request - Invalid url',
-        duration: Date.now() - t0
-      })
-    }
-
-    return new Promise(function (resolve, reject) {
-      const lib = httpOptions.protocol === 'https:' ? https : http
-      const req = lib.request(httpOptions, function (res) {
-        res.pipe(stream)
-        const ret = {
-          headers: res.headers,
-          status: res.statusCode,
-          message: statusCode(statusCodes, res.statusCode),
-          duration: Date.now() - t0
-        }
-
-        if (ret.status < 400) {
-          return resolve(ret)
-        } else {
-          return reject(ret)
-        }
-      })
-
-      req.setTimeout(config.requestTimeout, function () {
-        req.abort()
-        reject({
-          headers: {},
-          data: new Error('request timed out'),
-          status: 500,
-          message: 'Error: request timed out',
-          duration: Date.now() - t0
-        })
-      })
-
-      req.on('error', function (err) {
-        reject({
-          headers: {},
-          data: err,
-          status: 500,
-          message: err.message || 'internal error',
-          duration: Date.now() - t0
-        })
-      })
-
-      req.end()
-    })
-  }
-
   const couch = {}
 
   /**
@@ -293,13 +242,33 @@ module.exports = function (opt) {
    */
 
   /**
-   * Get server info
-   * @param  {String} baseUrl
+   * Request 
+   * @param  {{
+   			method:String,
+   			url:String,
+   			statusCodes:{[key:Number]:String},
+   			postData:any,
+   			postContentType:String,
+   			acceptContentType:String,
+   			respStream:StreamWritable|Array<StreamWritable>
+   			}} params
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getInfo = function getInfo (baseUrl) {
+  couch.request=request
+  /**
+   * Get server info
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
+   * @return {Promise}
+   */
+  couch.getInfo = function getInfo (stream) {
     return request({
-      url: `${baseUrl}/`,
+      url: `${config.baseUrl}/`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -309,12 +278,15 @@ module.exports = function (opt) {
 
   /**
    * Get the list of all databases.
-   * @param  {String} baseUrl
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.listDatabases = function listDatabases (baseUrl) {
+  couch.listDatabases = function listDatabases (stream) {
     return request({
-      url: `${baseUrl}/_all_dbs`,
+      url: `${config.baseUrl}/_all_dbs`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -324,13 +296,16 @@ module.exports = function (opt) {
 
   /**
    * Create database
-   * @param  {String} baseUrl
    * @param  {String} dbName
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.createDatabase = function createDatabase (baseUrl, dbName) {
+  couch.createDatabase = function createDatabase (dbName,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'PUT',
       statusCodes: {
         201: 'Created - Database created successfully',
@@ -343,13 +318,16 @@ module.exports = function (opt) {
 
   /**
    * Get database
-   * @param  {String} baseUrl
    * @param  {String} dbName
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getDatabase = function getDatabase (baseUrl, dbName) {
+  couch.getDatabase = function getDatabase (dbName,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully',
@@ -360,13 +338,16 @@ module.exports = function (opt) {
 
   /**
    * Get database head
-   * @param  {String} baseUrl
    * @param  {String} dbName
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getDatabaseHead = function getDatabaseHead (baseUrl, dbName) {
+  couch.getDatabaseHead = function getDatabaseHead (dbName,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'HEAD',
       statusCodes: {
         200: 'OK - Database exists',
@@ -377,13 +358,16 @@ module.exports = function (opt) {
 
   /**
    * Delete database
-   * @param  {String} baseUrl
    * @param  {String} dbName
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.deleteDatabase = function deleteDatabase (baseUrl, dbName) {
+  couch.deleteDatabase = function deleteDatabase (dbName,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Database removed successfully',
@@ -396,15 +380,18 @@ module.exports = function (opt) {
 
   /**
    * Get all documents
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {Object} [query]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getAllDocuments = function getAllDocuments (baseUrl, dbName, queryObj) {
+  couch.getAllDocuments = function getAllDocuments (dbName, queryObj,stream) {
     const queryStr = createQueryString(queryObj)
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_all_docs${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_all_docs${queryStr}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -414,16 +401,19 @@ module.exports = function (opt) {
 
   /**
    * Get Document Head
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {Object} [query]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getDocumentHead = function getDocumentHead (baseUrl, dbName, docId, queryObj) {
+  couch.getDocumentHead = function getDocumentHead (dbName, docId, queryObj,stream) {
     const queryStr = createQueryString(queryObj)
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}${queryStr}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'HEAD',
       statusCodes: {
         200: 'OK - Document exists',
@@ -436,16 +426,19 @@ module.exports = function (opt) {
 
   /**
    * Get Document
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {Object} [query]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getDocument = function getDocument (baseUrl, dbName, docId, queryObj) {
+  couch.getDocument = function getDocument (dbName, docId, queryObj) {
     const queryStr = createQueryString(queryObj)
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}${queryStr}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully',
@@ -459,17 +452,20 @@ module.exports = function (opt) {
 
   /**
    * Copy an existing document to a new document
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} newDocId
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.copyDocument = function copyDocument (baseUrl, dbName, docId, newDocId) {
+  couch.copyDocument = function copyDocument (dbName, docId, newDocId,stream) {
     if (docId && newDocId) {
       return request({
         headers: { Destination: newDocId },
-        url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}`,
+        url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}`,
+        [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
         method: 'COPY',
         statusCodes: {
           201: 'Created – Document created and stored on disk',
@@ -485,17 +481,20 @@ module.exports = function (opt) {
 
   /**
    * Create a new document or new revision of an existing document
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {Object} doc
    * @param  {String} [docId]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.createDocument = function createDocument (baseUrl, dbName, doc, docId) {
+  couch.createDocument = function createDocument (dbName, doc, docId,stream) {
     if (docId) {
       // create document by id (PUT)
       return request({
-        url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}`,
+        url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}`,
+        [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
         method: 'PUT',
         postData: doc,
         postContentType: 'application/json',
@@ -511,7 +510,8 @@ module.exports = function (opt) {
     } else {
       // create document without explicit id (POST)
       return request({
-        url: `${baseUrl}/${encodeURIComponent(dbName)}`,
+        url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
+        [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
         method: 'POST',
         postData: doc,
         statusCodes: {
@@ -528,15 +528,18 @@ module.exports = function (opt) {
 
   /**
    * Delete a named document
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} rev
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.deleteDocument = function deleteDocument (baseUrl, dbName, docId, rev) {
+  couch.deleteDocument = function deleteDocument (dbName, docId, rev,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}?rev=${rev}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}?rev=${rev}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Document successfully removed',
@@ -551,14 +554,17 @@ module.exports = function (opt) {
 
   /**
    * Find documents (requires CouchDB >= 2.0.0)
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {Object} queryObj
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.findDocuments = function findDocuments (baseUrl, dbName, queryObj) {
+  couch.findDocuments = function findDocuments (dbName, queryObj,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_find`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_find`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'POST',
       postData: queryObj,
       statusCodes: {
@@ -572,13 +578,16 @@ module.exports = function (opt) {
 
   /**
    * Get one or more UUIDs
-   * @param  {String} baseUrl
    * @param  {Number} [count = 1]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getUuids = function getUuids (baseUrl, count) {
+  couch.getUuids = function getUuids (count,stream) {
     return request({
-      url: `${baseUrl}/_uuids?count=${count || 1}`,
+      url: `${config.baseUrl}/_uuids?count=${count || 1}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully',
@@ -589,16 +598,19 @@ module.exports = function (opt) {
 
   /**
    * Get design document
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {Object} [query]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getDesignDocument = function getDesignDocument (baseUrl, dbName, docId, queryObj) {
+  couch.getDesignDocument = function getDesignDocument (dbName, docId, queryObj,stream) {
     const queryStr = createQueryString(queryObj)
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}${queryStr}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully',
@@ -612,14 +624,17 @@ module.exports = function (opt) {
 
   /**
    * Get design document info
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getDesignDocumentInfo = function getDesignDocumentInfo (baseUrl, dbName, docId) {
+  couch.getDesignDocumentInfo = function getDesignDocumentInfo (dbName, docId,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}/_info`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}/_info`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -629,15 +644,18 @@ module.exports = function (opt) {
 
   /**
    * Create a new design document or new revision of an existing design document
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {Object} doc
    * @param  {String} docId
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.createDesignDocument = function createDesignDocument (baseUrl, dbName, doc, docId) {
+  couch.createDesignDocument = function createDesignDocument (dbName, doc, docId,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'PUT',
       postData: doc,
       statusCodes: {
@@ -653,15 +671,18 @@ module.exports = function (opt) {
 
   /**
    * Delete a named design document
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} rev
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.deleteDesignDocument = function deleteDesignDocument (baseUrl, dbName, docId, rev) {
+  couch.deleteDesignDocument = function deleteDesignDocument (dbName, docId, rev,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}?rev=${rev}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}?rev=${rev}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Document successfully removed',
@@ -676,17 +697,20 @@ module.exports = function (opt) {
 
   /**
    * Get view
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} viewName
    * @param  {Object} [query]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getView = function getView (baseUrl, dbName, docId, viewName, queryObj) {
+  couch.getView = function getView (dbName, docId, viewName, queryObj,stream) {
     const queryStr = createQueryString(queryObj)
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}/_view/${encodeURIComponent(viewName)}${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}/_view/${encodeURIComponent(viewName)}${queryStr}`,
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -696,21 +720,27 @@ module.exports = function (opt) {
 
   /**
    * Bulk docs
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {Array} docs
    * @param  {Object} [opts]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.createBulkDocuments = function createBulkDocuments (baseUrl, dbName, docs, opts) {
-    const obj = {
-      docs: docs
-    }
-    Object.assign(obj, opts)
+  couch.createBulkDocuments = function createBulkDocuments (dbName, docs, opts,stream) {
+  	if(Array.isArray(docs)){
+  		docs = {
+	      docs: docs
+	    }
+	    Object.assign(docs, docs)
+  	}
+    
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_bulk_docs`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_bulk_docs`,
+      stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'POST',
-      postData: obj,
+      postData: docs,
       statusCodes: {
         201: 'Created – Document(s) have been created or updated',
         400: 'Bad Request – The request provided invalid JSON data',
@@ -724,17 +754,20 @@ module.exports = function (opt) {
 
   /**
    * Get attachment head
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} attName
    * @param  {String} [rev]
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getAttachmentHead = function getAttachmentHead (baseUrl, dbName, docId, attName, rev) {
+  couch.getAttachmentHead = function getAttachmentHead (dbName, docId, attName, rev,stream) {
     const queryStr = rev ? `?rev=${rev}` : ''
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
+      stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'HEAD',
       statusCodes: {
         200: 'OK - Attachment exists',
@@ -747,20 +780,21 @@ module.exports = function (opt) {
 
   /**
    * get attachment
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} attName
-   * @param  {StreamWritable} stream
    * @param  {String} [rev]
+   * @param  {StreamWritable|Array<StreamWritable>|string} [stream_or_ct] if string(ContentType) or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null 'Accept: application/octet-stream' and no auto parse as json
    * @return {Promise}
    */
-  couch.getAttachment = function getAttachment (baseUrl, dbName, docId, attName, stream, rev) {
+  couch.getAttachment = function getAttachment (dbName, docId, attName, rev, stream_or_ct) {
     const queryStr = rev ? `?rev=${rev}` : ''
     return Promise.resolve()
-      .then(() => requestStream({
-        url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
-        stream: stream,
+      .then(() => request({
+        url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
+        [stream_or_ct && (typeof(stream_or_ct) =="string" && "acceptContentType" || "stream") || undefined]: stream_or_ct || "application/octet-stream",
         statusCodes: {
           200: 'OK - Attachment exists',
           304: 'Not Modified - Attachment wasn’t modified if ETag equals specified If-None-Match header',
@@ -786,20 +820,23 @@ module.exports = function (opt) {
 
   /**
    * add attachment
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} attName
    * @param  {String} rev
    * @param  {String} contentType
-   * @param  {Buffer|String} att
+   * @param  {Buffer|String|Stream} data
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.addAttachment = function addAttachment (baseUrl, dbName, docId, attName, rev, contentType, data) {
+  couch.addAttachment = function addAttachment (dbName, docId, attName, rev, contentType, data,stream) {
     const queryStr = rev ? `?rev=${rev}` : ''
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
       method: 'PUT',
+      [stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       postContentType: contentType,
       postData: data,
       statusCodes: {
@@ -814,17 +851,20 @@ module.exports = function (opt) {
 
   /**
    * delete attachment
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} attName
    * @param  {String} rev
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.deleteAttachment = function deleteAttachment (baseUrl, dbName, docId, attName, rev) {
+  couch.deleteAttachment = function deleteAttachment (dbName, docId, attName, rev,stream) {
     const queryStr = rev ? `?rev=${rev}` : ''
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
+      stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'DELETE',
       statusCodes: {
         200: 'OK – Attachment successfully removed',
@@ -839,14 +879,17 @@ module.exports = function (opt) {
 
   /**
    * create index (requires CouchDB >= 2.0.0)
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {Object} queryObj
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.createIndex = function createIndex (baseUrl, dbName, queryObj) {
+  couch.createIndex = function createIndex (dbName, queryObj,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_index`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index`,
+      stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'POST',
       postData: queryObj,
       statusCodes: {
@@ -860,13 +903,16 @@ module.exports = function (opt) {
 
   /**
    * get index (requires CouchDB >= 2.0.0)
-   * @param  {String} baseUrl
    * @param  {String} dbName
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getIndex = function getIndex (baseUrl, dbName) {
+  couch.getIndex = function getIndex (dbName,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_index`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index`,
+      stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'GET',
       statusCodes: {
         200: 'OK - Success',
@@ -879,15 +925,18 @@ module.exports = function (opt) {
 
   /**
    * delete index (requires CouchDB >= 2.0.0)
-   * @param  {String} baseUrl
    * @param  {String} dbName
    * @param  {String} docId - design document id
    * @param  {String} name - index name
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.deleteIndex = function deleteIndex (baseUrl, dbName, docId, name) {
+  couch.deleteIndex = function deleteIndex (dbName, docId, name,stream) {
     return request({
-      url: `${baseUrl}/${encodeURIComponent(dbName)}/_index/${encodeURIComponent(docId)}/json/${encodeURIComponent(name)}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index/${encodeURIComponent(docId)}/json/${encodeURIComponent(name)}`,
+      stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Success',
@@ -902,11 +951,15 @@ module.exports = function (opt) {
   /**
    * generic request function
    * @param  {String} url    e.g. http://localhost:5948/_all_dbs
+   * @param  {StreamWritable|Array<StreamWritable>|null} [stream] if null or undefined then return "data" in Promise 
+   			 otherwise pipe stream(s)
+   			 also if null not automate parse as json
    * @return {Promise}
    */
-  couch.getUrl = function (url) {
+  couch.getUrl = function (url,stream) {
     return request({
       url: url,
+      stream && "stream" || (stream==null && "acceptContentType" || undefined)]: stream,
       methode: 'GET'
     })
   }
