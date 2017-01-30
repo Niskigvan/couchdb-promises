@@ -53,9 +53,16 @@ module.exports = function (opt) {
     const url = param.url || config.baseUrl
     const statusCodes = param.statusCodes
     const postData = param.postData
-    const postContentType = param.postContentType
-    const acceptContentType = param.hasOwnProperty("acceptContentType") && (param.acceptContentType || "*/*") || "application/json"
     const respStream = param.stream
+    const postContentType = (param.postContentType==undefined
+        && "application/json"
+        || (param.postContentType==false || param.postContentType==null) && "application/octet-stream"
+        || param.postContentType)
+    const acceptContentType = (param.acceptContentType==undefined
+        && "application/json"
+        || (param.acceptContentType==false || param.acceptContentType==null) && "*/*"
+        || param.acceptContentType)
+
 
     const o = urlParse(url)
     const httpOptions = {
@@ -485,40 +492,21 @@ module.exports = function (opt) {
    * @return {Promise}
    */
   couch.createDocument = function createDocument (dbName, doc, docId,stream) {
-    if (docId) {
-      // create document by id (PUT)
-      return request({
-        url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}`,
-        [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
-        method: 'PUT',
-        postData: doc,
-        postContentType: 'application/json',
-        statusCodes: {
-          201: 'Created – Document created and stored on disk',
-          202: 'Accepted – Document data accepted, but not yet stored on disk',
-          400: 'Bad Request – Invalid request body or parameters',
-          401: 'Unauthorized – Write privileges required',
-          404: 'Not Found – Specified database or document ID doesn’t exists',
-          409: 'Conflict – Document with the specified ID already exists or specified revision is not latest for target document'
-        }
-      })
-    } else {
-      // create document without explicit id (POST)
-      return request({
-        url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
-        [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
-        method: 'POST',
-        postData: doc,
-        statusCodes: {
-          201: 'Created – Document created and stored on disk',
-          202: 'Accepted – Document data accepted, but not yet stored on disk',
-          400: 'Bad Request – Invalid database name',
-          401: 'Unauthorized – Write privileges required',
-          404: 'Not Found – Database doesn’t exists',
-          409: 'Conflict – A Conflicting Document with same ID already exists'
-        }
-      })
-    }
+    return request({
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}${docId && "/"+encodeURIComponent(docId)}`,
+      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      method: docId && 'PUT' || 'POST',
+      postData: doc,
+      postContentType: 'application/json',
+      statusCodes: {
+        201: 'Created – Document created and stored on disk',
+        202: 'Accepted – Document data accepted, but not yet stored on disk',
+        400: 'Bad Request – Invalid request body or parameters',
+        401: 'Unauthorized – Write privileges required',
+        404: 'Not Found – Specified database or document ID doesn’t exists',
+        409: 'Conflict – Document with the specified ID already exists or specified revision is not latest for target document'
+      }
+    })
   }
 
   /**
@@ -649,8 +637,8 @@ module.exports = function (opt) {
    */
   couch.createDesignDocument = function createDesignDocument (dbName, doc, docId,stream) {
     return request({
-      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}`,
-      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design${docId && '/'+encodeURIComponent(docId)}`,
+      [stream && 'stream' || ((stream==false || stream==null) && 'acceptContentType' || undefined)]: stream || null,
       method: 'PUT',
       postData: doc,
       statusCodes: {
