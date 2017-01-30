@@ -30,8 +30,6 @@ module.exports = function (opt) {
     ) return true
     return false
   }
-  if(config.baseUrl && !isValidUrl(config.baseUrl))
-  	 throw new Error('Invalid baseUrl')
 
   function createQueryString (queryObj) {
     const obj = Object.assign({}, queryObj)
@@ -56,9 +54,7 @@ module.exports = function (opt) {
     const statusCodes = param.statusCodes
     const postData = param.postData
     const postContentType = param.postContentType
-    const acceptContentType = param.acceptContentType || "*/*"
-    if(!params.hasOwnProperty(acceptContentType))
-    	acceptContentType="application/json"
+    const acceptContentType = param.hasOwnProperty("acceptContentType") && (param.acceptContentType || "*/*") || "application/json"
     const respStream = param.stream
 
     const o = urlParse(url)
@@ -139,7 +135,6 @@ module.exports = function (opt) {
         duration: Date.now() - t0
       })
     }
-
     return new Promise(function (resolve, reject) {
       const lib = httpOptions.protocol === 'https:' ? https : http
       const req = respStream && lib.request(httpOptions, function (res) {
