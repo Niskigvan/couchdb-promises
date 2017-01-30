@@ -738,7 +738,7 @@ module.exports = function (opt) {
     
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_bulk_docs`,
-      stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
+      [stream && "stream" || ((stream==false || stream==null) && "acceptContentType" || undefined)]: stream || null,
       method: 'POST',
       postData: docs,
       statusCodes: {
