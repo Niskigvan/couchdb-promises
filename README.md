@@ -32,6 +32,8 @@ const db = require('couchdb-promises')({
   baseUrl: 'http://localhost:5984'  // https://[user:password@]hostname:port
 })
 const dbName = 'testdb'
+const JSONStream = require('JSONStream')
+const es = require('event-stream')
 ```
 
 #### get info
@@ -174,6 +176,7 @@ db.createDatabase(dbName)
 ```
 
 #### get all documents
+Clasic variant:
 ```javascript
 .then(() => db.getAllDocuments(dbName, {
   descending: true,
@@ -186,7 +189,40 @@ db.createDatabase(dbName)
 //   message: 'OK - Request completed successfully',
 //   duration: 9 }
 ```
+Stream variant:
+```javascript
+.then(() => db.getAllDocuments(dbName, {
+  descending: true,
+  include_docs: true
+},[
+  JSONStream.parse('rows.*.doc'),
+  es.map(function (data,cb) {
+    console.log(data)
+    cb(null, data)
+  })
+])).then(console.log)
+// {_id:"1",...}
+// {_id:"2",...}
+// {_id:"3",...}
+// { headers: { ... },
+//   status: 200,
+//   message: 'OK - Request completed successfully',
+//   duration: 9 }
 
+```
+Raw variant:
+```javascript
+.then(() => db.getAllDocuments(dbName, {
+  descending: true,
+  include_docs: true
+},false))
+.then(console.log)
+// { headers: { ... },
+//   data: '{ "total_rows": 2, "offset": 0, "rows": [ "[Object]", "[Object]" ] }',
+//   status: 200,
+//   message: 'OK - Request completed successfully',
+//   duration: 9 }
+```
 #### delete document
 ```javascript
 .then(() => db.deleteDocument(dbName, 'doc2', '2-ee5ea9ac0bb1bec913a9b5e7bc11b113'))
