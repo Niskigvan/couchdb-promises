@@ -144,7 +144,7 @@ module.exports = function (opt) {
       const lib = httpOptions.protocol === 'https:' ? https : http
       const req = respStream && lib.request(httpOptions, function (res) {
       	if(Array.isArray(respStream))
-      		respStream.forEach(function(el){res.pipe(el)})
+      		respStream.reduce(function(acc,v){return acc.pipe(v); },res)
         else res.pipe(respStream)
         const ret = {
           headers: res.headers,
@@ -388,11 +388,15 @@ module.exports = function (opt) {
    * @return {Promise}
    */
   couch.getAllDocuments = function getAllDocuments (dbName, queryObj,stream) {
+    let keys
+    queryObj.keys && (keys = queryObj.keys) && (delete queryObj.keys)
     const queryStr = createQueryString(queryObj)
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_all_docs${queryStr}`,
       [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
-      method: 'GET',
+      method: keys && 'POST' || 'GET',
+      [keys && "postData" || null]:keys,
+      [keys && "postContentType" || null]:'application/json',
       statusCodes: {
         200: 'OK - Request completed successfully'
       }
