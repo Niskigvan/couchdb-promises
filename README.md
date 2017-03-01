@@ -99,7 +99,7 @@ db.createDatabase(dbName)
 
 #### create document
 ```javascript
-.then(() => db.createDocument(dbName, {name: 'Bob'}))
+.then(() => db.updateDocument(dbName, {name: 'Bob'}))
 .then(console.log)
 // { headers: { ... },
 //   data:
@@ -113,7 +113,7 @@ db.createDatabase(dbName)
 
 #### create document by id
 ```javascript
-.then(() => db.createDocument(dbName, {name: 'Alice'}, 'doc2'))
+.then(() => db.updateDocument(dbName, {name: 'Alice'}, 'doc2'))
 .then(console.log)
 // { headers: { ... },
 //   data:
@@ -157,12 +157,27 @@ db.createDatabase(dbName)
 //   message: 'OK - Request completed successfully',
 //   duration: 11 }
 ```
+call custom _show function named 'as_xml' in ddoc 'index'
+```javascript
+.then(() => db.getDocument(dbName, 'as_xml/doc2',{},false)) //equivalent of 'index/as_xml/doc2'
+.then(response => { console.log(response); return response.data })
+// { headers: { ... },
+//   data:
+//   "<doc>
+//      <_id>doc2</_id>
+//      <_rev>1-88b10f13383b5d1e34d1d66d296f061f</_rev>
+//      <name>Alice</name>
+//   <doc>",
+//   status: 200,
+//   message: 'OK - Request completed successfully',
+//   duration: 11 }
+```
 
 #### update document
 ```javascript
 .then((doc) => {
   doc.age = 42
-  return db.createDocument(dbName, doc, 'doc2')
+  return db.updateDocument(dbName, doc, 'doc2')
 })
 .then(console.log)
 // { headers: { ... },
@@ -174,7 +189,22 @@ db.createDatabase(dbName)
 //   message: 'Created – Document created and stored on disk',
 //   duration: 36 }
 ```
-
+call custom _update function named 'only_age' in ddoc 'fields'
+```javascript
+.then((doc) => {
+  doc.age = 42
+  return db.updateDocument(dbName, 42, 'fields/only_age/doc2')
+})
+.then(console.log)
+// { headers: { ... },
+//   data:
+//    { ok: true,
+//      id: 'doc2',
+//      rev: '2-ee5ea9ac0bb1bec913a9b5e7bc11b113' },
+//   status: 201,
+//   message: 'Created – Document created and stored on disk',
+//   duration: 36 }
+```
 #### get all documents
 Clasic variant:
 ```javascript
@@ -524,13 +554,13 @@ returns a JSON structure of all of the documents in a given database
 [[CouchDB API]](http://docs.couchdb.org/en/latest/api/database/bulk-api.html#db-all-docs)
 [[example]](examples/example.js)
 
-#### db.createDocument( dbName, doc )
+#### db.updateDocument( dbName, doc )
 create a new document
 <br>
 [[CouchDB API]](http://docs.couchdb.org/en/latest/api/database/common.html#post--db)
 [[example]](examples/example.js)
 
-#### db.createDocument( dbName, doc, \[docId] )
+#### db.updateDocument( dbName, doc, \[docId] )
 create a new document or a new revision of the existing document.
 <br>
 [[CouchDB API]](http://docs.couchdb.org/en/latest/api/document/common.html#put--db-docid)
