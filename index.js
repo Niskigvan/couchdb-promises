@@ -439,9 +439,9 @@ module.exports = function (opt) {
   }
 
   /**
-   * Get Document
+   * Get Document or call show function
    * @param  {String} dbName
-   * @param  {String} docId can be equal to "docId" or "show_func_name/docId" or "ddoc_name/show_func_name/docId"
+   * @param  {String} docId can be equal to "docId" or "show_func_name/docId" or "ddoc_name/show_func_name/docId" or "show_func_name/"
    * @param  {Object} [query]
    * @param  {StreamWritable|Array<StreamWritable>|null|string} [stream_or_ct] if null or undefined then return "data" in Promise 
    			 if StreamWritable|Array<StreamWritable> pipe it to http req
@@ -455,7 +455,7 @@ module.exports = function (opt) {
     docId=docPathArr.pop()
     let docPath=(docPathArr.length==1
         && `_design/${config.defaultDDocName}/_show/${docPathArr[0]}/`
-        || docPathArr.length==2 && `_design/${docPathArr[1]}/_show/${docPathArr[1]}/`
+        || docPathArr.length==2 && `_design/${docPathArr[0]}/_show/${docPathArr[1]}/`
         || "")
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${docPath}${encodeURIComponent(docId)}${queryStr}`,
@@ -474,7 +474,7 @@ module.exports = function (opt) {
   /**
    * Copy an existing document to a new document
    * @param  {String} dbName
-   * @param  {String} docId
+   * @param  {String} docId  can be equal to "docId" or "update_func_name/docId" or "ddoc_name/update_func_name/docId" or "update_func_name/"
    * @param  {String} newDocId
    * @param  {StreamWritable|Array<StreamWritable>|null|string} [stream_or_ct] if null or undefined then return "data" in Promise 
    			 if StreamWritable|Array<StreamWritable> pipe it to http req
@@ -502,21 +502,27 @@ module.exports = function (opt) {
   }
 
   /**
-   * Create a new document or new revision of an existing document
+   * Create a new document (if docId seted) or new revision of an existing document or call _update func
    * @param  {String} dbName
    * @param  {Object} doc
-   * @param  {String} [docId]
+   * @param  {String|null} [docId]
    * @param  {StreamWritable|Array<StreamWritable>|null|string} [stream_or_ct] if null or undefined then return "data" in Promise 
    			 if StreamWritable|Array<StreamWritable> pipe it to http req
    			 if 'null|false' not automate parse as json
    			 also if is string then set value as acceptContentType
    * @return {Promise}
    */
-  couch.createDocument = function createDocument (dbName, doc, docId,stream_or_ct) {
+  couch.updateDocument = function createDocument (dbName, doc, docId,stream_or_ct) {
+    let docPathArr = docId && docId.replace(/\s/g, '').replace(/\/$/g, '').split("/") || []
+    docId=docId && docPathArr.pop() || null
+    let docPath=(docPathArr.length==1
+        && `_design/${config.defaultDDocName}/_update/${docPathArr[0]}/`
+        || docPathArr.length==2 && `_design/${docPathArr[0]}/_update/${docPathArr[1]}/`
+        || "")
     return request({
-      url: `${config.baseUrl}/${encodeURIComponent(dbName)}${docId && "/"+encodeURIComponent(docId)}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${docPath}${docId && encodeURIComponent(docId)}`,
       [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
-      method: docId && 'PUT' || 'POST',
+      method: docId && !docPath.length && 'PUT' || 'POST',
       postData: doc,
       postContentType: 'application/json',
       statusCodes: {
@@ -707,7 +713,7 @@ module.exports = function (opt) {
   }
 
   /**
-   * Get view
+   * Query view or list of view
    * @param  {String} dbName
    * @param  {String} docId
    * @param  {String} viewName
@@ -718,10 +724,17 @@ module.exports = function (opt) {
    			 also if is string then set value as acceptContentType
    * @return {Promise}
    */
-  couch.getView = function getView (dbName, docId, viewName, queryObj,stream_or_ct) {
+  couch.queryView = function queryView (dbName, viewName, queryObj,stream_or_ct) {
     const queryStr = createQueryString(queryObj)
+    let viewPathArr = viewName && viewName.replace(/\s/g, '').replace(/\/$/g, '').split("/") || []
+    let viewPath=(viewPathArr.length<=1
+        && `_design/${config.defaultDDocName}/_view/${encodeURIComponent(viewPathArr[0])}/`
+        || viewPathArr.length==2 && `_design/${viewPathArr[0].length && encodeURIComponent(viewPathArr[0]) || config.defaultDDocName}/_view/${encodeURIComponent(viewPathArr[1])}/`
+        || viewPathArr.length==3 && `_design/${viewPathArr[0].length && encodeURIComponent(viewPathArr[0]) || config.defaultDDocName}/_list/${encodeURIComponent(viewPathArr[1])}/${encodeURIComponent(viewPathArr[2])}`
+        || viewPathArr.length==4 && `_design/${viewPathArr[0].length && encodeURIComponent(viewPathArr[0]) || config.defaultDDocName}/_list/${encodeURIComponent(viewPathArr[1])}/${viewPathArr[2].length && encodeURIComponent(viewPathArr[2]) || config.defaultDDocName}/${encodeURIComponent(viewPathArr[3])}`
+        || "")
     return request({
-      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}/_view/${encodeURIComponent(viewName)}${queryStr}`,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${viewPath}${queryStr}`,
       [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
       method: 'GET',
       statusCodes: {
