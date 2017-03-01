@@ -268,10 +268,10 @@ module.exports = function (opt) {
    			 also if is string then set value as acceptContentType
    * @return {Promise}
    */
-  couch.getInfo = function getInfo (stream) {
+  couch.getInfo = function getInfo (stream_or_ct) {
     return request({
       url: `${config.baseUrl}/`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -287,10 +287,10 @@ module.exports = function (opt) {
    			 also if is string then set value as acceptContentType
    * @return {Promise}
    */
-  couch.listDatabases = function listDatabases (stream) {
+  couch.listDatabases = function listDatabases (stream_or_ct) {
     return request({
       url: `${config.baseUrl}/_all_dbs`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -310,7 +310,7 @@ module.exports = function (opt) {
   couch.createDatabase = function createDatabase (dbName,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream,
       method: 'PUT',
       statusCodes: {
         201: 'Created - Database created successfully',
@@ -333,7 +333,7 @@ module.exports = function (opt) {
   couch.getDatabase = function getDatabase (dbName,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully',
@@ -354,7 +354,7 @@ module.exports = function (opt) {
   couch.getDatabaseHead = function getDatabaseHead (dbName,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'HEAD',
       statusCodes: {
         200: 'OK - Database exists',
@@ -375,7 +375,7 @@ module.exports = function (opt) {
   couch.deleteDatabase = function deleteDatabase (dbName,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Database removed successfully',
@@ -402,7 +402,7 @@ module.exports = function (opt) {
     const queryStr = createQueryString(queryObj)
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_all_docs${queryStr}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: keys && 'POST' || 'GET',
       [keys && "postData" || null]:keys,
       [keys && "postContentType" || null]:'application/json',
@@ -427,7 +427,7 @@ module.exports = function (opt) {
     const queryStr = createQueryString(queryObj)
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}${queryStr}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'HEAD',
       statusCodes: {
         200: 'OK - Document exists',
@@ -451,15 +451,15 @@ module.exports = function (opt) {
    */
   couch.getDocument = function getDocument (dbName, docId, queryObj,stream_or_ct) {
     const queryStr = createQueryString(queryObj)
-    let docPathArr = docId.replace(/\s/g, '').replace(/\/$/g, '').split("/")
+    let docPathArr = docId.split("/")
     docId=docPathArr.pop()
     let docPath=(docPathArr.length==1
         && `_design/${config.defaultDDocName}/_show/${docPathArr[0]}/`
         || docPathArr.length==2 && `_design/${docPathArr[0]}/_show/${docPathArr[1]}/`
         || "")
     return request({
-      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${docPath}${encodeURIComponent(docId)}${queryStr}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${docPath}${docId && encodeURIComponent(docId) || ""}${queryStr}`,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully',
@@ -487,7 +487,7 @@ module.exports = function (opt) {
       return request({
         headers: { Destination: newDocId },
         url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}`,
-        [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+        [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
         method: 'COPY',
         statusCodes: {
           201: 'Created – Document created and stored on disk',
@@ -513,7 +513,7 @@ module.exports = function (opt) {
    * @return {Promise}
    */
   couch.updateDocument = function createDocument (dbName, doc, docId,stream_or_ct) {
-    let docPathArr = docId && docId.replace(/\s/g, '').replace(/\/$/g, '').split("/") || []
+    let docPathArr = docId && docId.split("/") || []
     docId=docId && docPathArr.pop() || null
     let docPath=(docPathArr.length==1
         && `_design/${config.defaultDDocName}/_update/${docPathArr[0]}/`
@@ -521,7 +521,7 @@ module.exports = function (opt) {
         || "")
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${docPath}${docId && encodeURIComponent(docId)}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: docId && !docPath.length && 'PUT' || 'POST',
       postData: doc,
       postContentType: 'application/json',
@@ -550,7 +550,7 @@ module.exports = function (opt) {
   couch.deleteDocument = function deleteDocument (dbName, docId, rev,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}?rev=${rev}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Document successfully removed',
@@ -576,7 +576,7 @@ module.exports = function (opt) {
   couch.findDocuments = function findDocuments (dbName, queryObj,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_find`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'POST',
       postData: queryObj,
       statusCodes: {
@@ -600,7 +600,7 @@ module.exports = function (opt) {
   couch.getUuids = function getUuids (count,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/_uuids?count=${count || 1}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully',
@@ -624,7 +624,7 @@ module.exports = function (opt) {
     const queryStr = createQueryString(queryObj)
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}${queryStr}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully',
@@ -649,7 +649,7 @@ module.exports = function (opt) {
   couch.getDesignDocumentInfo = function getDesignDocumentInfo (dbName, docId,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}/_info`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -671,7 +671,7 @@ module.exports = function (opt) {
   couch.createDesignDocument = function createDesignDocument (dbName, doc, docId,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design${docId && '/'+encodeURIComponent(docId)}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'PUT',
       postData: doc,
       statusCodes: {
@@ -699,7 +699,7 @@ module.exports = function (opt) {
   couch.deleteDesignDocument = function deleteDesignDocument (dbName, docId, rev,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_design/${encodeURIComponent(docId)}?rev=${rev}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Document successfully removed',
@@ -726,7 +726,7 @@ module.exports = function (opt) {
    */
   couch.queryView = function queryView (dbName, viewName, queryObj,stream_or_ct) {
     const queryStr = createQueryString(queryObj)
-    let viewPathArr = viewName && viewName.replace(/\s/g, '').replace(/\/$/g, '').split("/") || []
+    let viewPathArr = viewName && viewName.split("/") || []
     let viewPath=(viewPathArr.length<=1
         && `_design/${config.defaultDDocName}/_view/${encodeURIComponent(viewPathArr[0])}/`
         || viewPathArr.length==2 && `_design/${viewPathArr[0].length && encodeURIComponent(viewPathArr[0]) || config.defaultDDocName}/_view/${encodeURIComponent(viewPathArr[1])}/`
@@ -735,7 +735,7 @@ module.exports = function (opt) {
         || "")
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${viewPath}${queryStr}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Request completed successfully'
@@ -764,7 +764,7 @@ module.exports = function (opt) {
     
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_bulk_docs`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'POST',
       postData: docs,
       statusCodes: {
@@ -794,7 +794,7 @@ module.exports = function (opt) {
     const queryStr = rev ? `?rev=${rev}` : ''
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'HEAD',
       statusCodes: {
         200: 'OK - Attachment exists',
@@ -830,10 +830,10 @@ module.exports = function (opt) {
         }
       })
       .then(response => new Promise(function (resolve, reject) {
-        stream.on('close', function () {
+        stream_or_ct.on('close', function () {
           return resolve(response)
         })
-        stream.on('error', function (err) {
+        stream_or_ct.on('error', function (err) {
           return reject({
             headers: {},
             data: err,
@@ -864,7 +864,7 @@ module.exports = function (opt) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
       method: 'PUT',
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       postContentType: contentType,
       postData: data,
       statusCodes: {
@@ -893,7 +893,7 @@ module.exports = function (opt) {
     const queryStr = rev ? `?rev=${rev}` : ''
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'DELETE',
       statusCodes: {
         200: 'OK – Attachment successfully removed',
@@ -919,7 +919,7 @@ module.exports = function (opt) {
   couch.createIndex = function createIndex (dbName, queryObj,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'POST',
       postData: queryObj,
       statusCodes: {
@@ -943,7 +943,7 @@ module.exports = function (opt) {
   couch.getIndex = function getIndex (dbName,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'GET',
       statusCodes: {
         200: 'OK - Success',
@@ -968,7 +968,7 @@ module.exports = function (opt) {
   couch.deleteIndex = function deleteIndex (dbName, docId, name,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}/_index/${encodeURIComponent(docId)}/json/${encodeURIComponent(name)}`,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'DELETE',
       statusCodes: {
         200: 'OK - Success',
@@ -992,7 +992,7 @@ module.exports = function (opt) {
   couch.getUrl = function (url,stream_or_ct) {
     return request({
       url: url,
-      [stream && typeof(stream) !="string" && "stream" || ((stream===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       methode: 'GET'
     })
   }
