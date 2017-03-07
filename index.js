@@ -310,7 +310,7 @@ module.exports = function (opt) {
   couch.createDatabase = function createDatabase (dbName,stream_or_ct) {
     return request({
       url: `${config.baseUrl}/${encodeURIComponent(dbName)}`,
-      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream,
+      [stream_or_ct && typeof(stream_or_ct) !="string" && "stream" || ((stream_or_ct===undefined) && undefined || "acceptContentType")]: stream_or_ct,
       method: 'PUT',
       statusCodes: {
         201: 'Created - Database created successfully',
