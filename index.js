@@ -821,7 +821,7 @@ module.exports = function (opt) {
     return Promise.resolve()
       .then(() => request({
         url: `${config.baseUrl}/${encodeURIComponent(dbName)}/${encodeURIComponent(docId)}/${encodeURIComponent(attName)}${queryStr}`,
-        [stream_or_ct && ((typeof(stream_or_ct) =="string" || stream==false || stream==null) && "acceptContentType" || "stream") || undefined]: stream_or_ct || "application/octet-stream",
+        [stream_or_ct && ((typeof(stream_or_ct) =="string" || stream_or_ct==false || stream_or_ct==null) && "acceptContentType" || "stream") || undefined]: stream_or_ct || "application/octet-stream",
         statusCodes: {
           200: 'OK - Attachment exists',
           304: 'Not Modified - Attachment wasn’t modified if ETag equals specified If-None-Match header',
